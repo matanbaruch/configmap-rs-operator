@@ -288,7 +288,7 @@ data:
 `, configMapName, testNamespace)
 
 			configMapFile := filepath.Join("/tmp", "test-configmap.yaml")
-			err = os.WriteFile(configMapFile, []byte(configMapYaml), 0644)
+			err = os.WriteFile(configMapFile, []byte(configMapYaml), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			cmd = exec.Command("kubectl", "apply", "-f", configMapFile)
@@ -325,7 +325,7 @@ spec:
 `, replicaSetName, testNamespace, configMapName)
 
 			replicaSetFile := filepath.Join("/tmp", "test-replicaset.yaml")
-			err = os.WriteFile(replicaSetFile, []byte(replicaSetYaml), 0644)
+			err = os.WriteFile(replicaSetFile, []byte(replicaSetYaml), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			cmd = exec.Command("kubectl", "apply", "-f", replicaSetFile)

@@ -24,14 +24,14 @@ import (
 // ReplicaSetReconciler reconciles a ReplicaSet object
 type ReplicaSetReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Config *config.OperatorConfig
+	Scheme    *runtime.Scheme
+	Config    *config.OperatorConfig
 	StartTime time.Time
 }
 
-//+kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *ReplicaSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("replicaset", req.NamespacedName)
@@ -57,12 +57,20 @@ func (r *ReplicaSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// This prevents processing existing ReplicaSets when the operator starts
 	creationTime := rs.CreationTimestamp.Time
 	if creationTime.Before(r.StartTime) {
-		logger.Info("Skipping ReplicaSet created before operator start", "name", rs.Name, "created", creationTime.Format(time.RFC3339), "operatorStart", r.StartTime.Format(time.RFC3339))
+		logger.Info("Skipping ReplicaSet created before operator start",
+			"name", rs.Name,
+			"created", creationTime.Format(time.RFC3339),
+			"operatorStart", r.StartTime.Format(time.RFC3339))
 		return ctrl.Result{}, nil
 	}
 
 	if r.Config.Debug {
-		logger.Info("Processing recently created ReplicaSet", "name", rs.Name, "namespace", rs.Namespace, "age", time.Since(creationTime), "created", creationTime.Format(time.RFC3339), "operatorStart", r.StartTime.Format(time.RFC3339))
+		logger.Info("Processing recently created ReplicaSet",
+			"name", rs.Name,
+			"namespace", rs.Namespace,
+			"age", time.Since(creationTime),
+			"created", creationTime.Format(time.RFC3339),
+			"operatorStart", r.StartTime.Format(time.RFC3339))
 	}
 
 	// Extract ConfigMaps referenced as volumes
@@ -109,10 +117,12 @@ func (r *ReplicaSetReconciler) extractConfigMapVolumes(rs *appsv1.ReplicaSet) []
 	configMapSet := make(map[string]bool)
 
 	// Check all containers in all pods
-	for _, container := range rs.Spec.Template.Spec.Containers {
+	for i := range rs.Spec.Template.Spec.Containers {
+		container := &rs.Spec.Template.Spec.Containers[i]
 		for _, volumeMount := range container.VolumeMounts {
 			// Find corresponding volume
-			for _, volume := range rs.Spec.Template.Spec.Volumes {
+			for j := range rs.Spec.Template.Spec.Volumes {
+				volume := &rs.Spec.Template.Spec.Volumes[j]
 				if volume.Name == volumeMount.Name && volume.ConfigMap != nil {
 					if !configMapSet[volume.ConfigMap.Name] {
 						configMapSet[volume.ConfigMap.Name] = true
@@ -124,9 +134,11 @@ func (r *ReplicaSetReconciler) extractConfigMapVolumes(rs *appsv1.ReplicaSet) []
 	}
 
 	// Check init containers as well
-	for _, container := range rs.Spec.Template.Spec.InitContainers {
+	for i := range rs.Spec.Template.Spec.InitContainers {
+		container := &rs.Spec.Template.Spec.InitContainers[i]
 		for _, volumeMount := range container.VolumeMounts {
-			for _, volume := range rs.Spec.Template.Spec.Volumes {
+			for j := range rs.Spec.Template.Spec.Volumes {
+				volume := &rs.Spec.Template.Spec.Volumes[j]
 				if volume.Name == volumeMount.Name && volume.ConfigMap != nil {
 					if !configMapSet[volume.ConfigMap.Name] {
 						configMapSet[volume.ConfigMap.Name] = true
@@ -140,7 +152,12 @@ func (r *ReplicaSetReconciler) extractConfigMapVolumes(rs *appsv1.ReplicaSet) []
 	return configMapNames
 }
 
-func (r *ReplicaSetReconciler) processConfigMap(ctx context.Context, namespace, name string, rs *appsv1.ReplicaSet, logger logr.Logger) error {
+func (r *ReplicaSetReconciler) processConfigMap(
+	ctx context.Context,
+	namespace, name string,
+	rs *appsv1.ReplicaSet,
+	logger logr.Logger,
+) error {
 	// Get the ConfigMap
 	var cm corev1.ConfigMap
 	cmKey := types.NamespacedName{Name: name, Namespace: namespace}
@@ -201,7 +218,7 @@ func (r *ReplicaSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if !ok {
 				return false
 			}
-			return rs.CreationTimestamp.Time.After(r.StartTime)
+			return rs.CreationTimestamp.After(r.StartTime)
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			// Don't process UPDATE events - we only care about new ReplicaSets

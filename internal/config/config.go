@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const trueValue = "true"
+
 // OperatorConfig holds the configuration for the operator
 type OperatorConfig struct {
 	// NamespaceRegex is a list of regular expressions to match namespaces
@@ -62,15 +64,15 @@ func (c *OperatorConfig) FinalizeConfig() {
 		}
 	}
 
-	if os.Getenv("DRY_RUN") == "true" {
+	if os.Getenv("DRY_RUN") == trueValue {
 		c.DryRun = true
 	}
 
-	if os.Getenv("DEBUG") == "true" {
+	if os.Getenv("DEBUG") == trueValue {
 		c.Debug = true
 	}
 
-	if os.Getenv("TRACE") == "true" {
+	if os.Getenv("TRACE") == trueValue {
 		c.Trace = true
 		c.Debug = true // Trace implies debug
 	}

@@ -54,7 +54,7 @@ jobs:
 
     - name: Load Docker image into Kind
       run: |
-        kind load docker-image controller:latest
+        kind load docker-image controller:latest --name kind
 
     - name: Install cert-manager
       run: |

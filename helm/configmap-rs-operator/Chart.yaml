@@ -1,0 +1,18 @@
+apiVersion: v2
+name: configmap-rs-operator
+description: A Kubernetes operator that adds ownerReferences to ConfigMaps when ReplicaSets mount them as volumes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - operator
+  - kubernetes
+  - configmap
+  - replicaset
+  - garbage-collection
+home: https://github.com/matanbaruch/configmap-rs-operator
+sources:
+  - https://github.com/matanbaruch/configmap-rs-operator
+maintainers:
+  - name: matanbaruch
+    email: matan.baruch@example.com

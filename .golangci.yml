@@ -1,0 +1,82 @@
+version: "2"
+run:
+  timeout: 5m
+  go: "1.24"
+  allow-parallel-runners: true
+
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - dupl
+    - errcheck
+    - ginkgolinter
+    - goconst
+    - gocyclo
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - gosec
+    - gocritic
+    
+  settings:
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+    gocyclo:
+      min-complexity: 15
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    nakedret:
+      max-func-lines: 30
+    gosec:
+      excludes:
+        - G404 # Use of weak random number generator
+    gocritic:
+      enabled-tags:
+        - performance
+        - style
+      disabled-checks:
+        - wrapperFunc
+        
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - lll
+        path: api/*
+      - linters:
+          - dupl
+          - lll
+          - gocyclo
+          - errcheck
+          - gosec
+        path: _test\.go
+      - linters:
+          - gosec
+        path: internal/config/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

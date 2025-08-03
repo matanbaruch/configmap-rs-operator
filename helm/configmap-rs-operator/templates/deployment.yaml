@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "configmap-rs-operator.fullname" . }}-controller-manager
+  labels:
+    {{- include "configmap-rs-operator.labels" . | nindent 4 }}
+    control-plane: controller-manager
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "configmap-rs-operator.selectorLabels" . | nindent 6 }}
+      control-plane: controller-manager
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "configmap-rs-operator.selectorLabels" . | nindent 8 }}
+        control-plane: controller-manager
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "configmap-rs-operator.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: manager
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --health-probe-bind-address=:{{ .Values.healthProbe.port }}
+        {{- if .Values.metrics.enabled }}
+        {{- if .Values.metrics.secure }}
+        - --metrics-bind-address=:{{ .Values.metrics.port }}
+        - --metrics-secure=true
+        {{- else }}
+        - --metrics-bind-address=:{{ .Values.metrics.port }}
+        - --metrics-secure=false
+        {{- end }}
+        {{- else }}
+        - --metrics-bind-address=0
+        {{- end }}
+        {{- if .Values.leaderElection.enabled }}
+        - --leader-elect
+        {{- end }}
+        {{- if .Values.config.dryRun }}
+        - --dry-run
+        {{- end }}
+        {{- if .Values.config.debug }}
+        - --debug
+        {{- end }}
+        {{- if .Values.config.trace }}
+        - --trace
+        {{- end }}
+        {{- if .Values.config.namespaceRegex }}
+        - --namespace-regex={{ join "," .Values.config.namespaceRegex }}
+        {{- end }}
+        env:
+        {{- if .Values.config.namespaceRegex }}
+        - name: NAMESPACE_REGEX
+          value: {{ join "," .Values.config.namespaceRegex | quote }}
+        {{- end }}
+        {{- if .Values.config.dryRun }}
+        - name: DRY_RUN
+          value: "true"
+        {{- end }}
+        {{- if .Values.config.debug }}
+        - name: DEBUG
+          value: "true"
+        {{- end }}
+        {{- if .Values.config.trace }}
+        - name: TRACE
+          value: "true"
+        {{- end }}
+        ports:
+        {{- if .Values.metrics.enabled }}
+        - name: metrics
+          containerPort: {{ .Values.metrics.port }}
+          protocol: TCP
+        {{- end }}
+        - name: health
+          containerPort: {{ .Values.healthProbe.port }}
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

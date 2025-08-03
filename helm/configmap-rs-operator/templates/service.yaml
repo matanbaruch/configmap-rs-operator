@@ -1,0 +1,19 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "configmap-rs-operator.fullname" . }}-metrics-service
+  labels:
+    {{- include "configmap-rs-operator.labels" . | nindent 4 }}
+    control-plane: controller-manager
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: {{ .Values.metrics.port }}
+    protocol: TCP
+    targetPort: metrics
+  selector:
+    {{- include "configmap-rs-operator.selectorLabels" . | nindent 4 }}
+    control-plane: controller-manager
+{{- end }}

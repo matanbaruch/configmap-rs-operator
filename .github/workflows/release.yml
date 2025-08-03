@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Extract version from tag
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Run tests
+      run: go test -race ./...
+
+    - name: Build binaries
+      run: |
+        mkdir -p dist
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o dist/manager-linux-amd64 cmd/main.go
+        CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -o dist/manager-linux-arm64 cmd/main.go
+        CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -a -installsuffix cgo -o dist/manager-darwin-amd64 cmd/main.go
+        CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -a -installsuffix cgo -o dist/manager-darwin-arm64 cmd/main.go
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o dist/manager-windows-amd64.exe cmd/main.go
+
+    - name: Create checksums
+      run: |
+        cd dist
+        sha256sum * > checksums.txt
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/*
+        generate_release_notes: true
+        draft: false
+        prerelease: ${{ contains(github.ref, '-') }}
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  helm:
+    runs-on: ubuntu-latest
+    needs: [release, docker]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: 'latest'
+
+    - name: Update Helm chart version and appVersion
+      run: |
+        sed -i "s/^version:.*/version: ${{ needs.release.outputs.version }}/" helm/configmap-rs-operator/Chart.yaml
+        sed -i "s/^appVersion:.*/appVersion: \"${{ needs.release.outputs.version }}\"/" helm/configmap-rs-operator/Chart.yaml
+
+    - name: Package Helm chart
+      run: |
+        mkdir -p helm-packages
+        helm package helm/configmap-rs-operator --destination helm-packages
+
+    - name: Configure Git
+      run: |
+        git config user.name "$GITHUB_ACTOR"
+        git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: helm-packages
+        destination_dir: helm-charts
+        keep_files: true
+
+    - name: Create Helm index
+      run: |
+        git checkout gh-pages
+        helm repo index . --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        git add index.yaml
+        git commit -m "Update Helm repository index" || exit 0
+        git push origin gh-pages
